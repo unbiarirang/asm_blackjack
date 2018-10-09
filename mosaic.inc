@@ -12,6 +12,11 @@ HARD				equ		200
 CID_TOOLBAR			equ		602
 CID_STATIC 			equ		601
 CID_STATUS 			equ 	600
+CID_USERWIN1		equ		603
+CID_USERWIN2		equ		604
+CID_USERWIN3		equ		605
+CID_USERWIN4		equ		606
+CID_USERWIN5		equ		607
 
 IMAGETYPE_STANDARD	equ		0
 IMAGETYPE_NUMBERS	equ		1
@@ -52,6 +57,7 @@ BMP_TOOLBAR		equ	801
 BMP_DEMOBITMAP	equ	802
 BMP_TABLE		equ 200
 BMP_CARD_A1		equ 201
+BMP_CARD		equ 202
 
 
 ;---- msgbox macro: usage MSGBOX "string to display" -------

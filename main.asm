@@ -35,19 +35,50 @@ GetCoordinates		PROTO	STDCALL	:DWORD
 DrawNumbers			PROTO	STDCALL
 CreateTiles			PROTO	STDCALL
 DrawProc			PROTO   STDCALL :DWORD, :DWORD
+DealerDraw			PROTO   STDCALL :DWORD, :DWORD
 InitGame			PROTO   STDCALL :DWORD
 SetColors           PROTO   STDCALL :DWORD
+DisplayCard			PROTO	STDCALL :DWORD, :DWORD, :DWORD, :DWORD, :DWORD, :DWORD
 
 
 .const
+	; Main window
 	WinWidth		DWORD	932
 	WinHeight		DWORD	800
+	; Child window to put dealer's card
 	WinChildX		DWORD	380
 	WinChildY		DWORD	50
-	WinChildWidth	DWORD	172 ; CardWidth*2
-	WinChildHeight	DWORD	138	; CardHeight+20
-	CardWidth		DWORD	86
-	CardHeight		DWORD	118
+	WinChildWidth	DWORD	156 ; CardWidth*2 + 20 - 10
+	WinChildHeight	DWORD	128	; CardHeight + 30
+	; User card window
+	WinCardWidth	DWORD	83	; CardWidth + 2 * 5
+	WinCardHeight	DWORD	138	; CardHeight + 30 + 2 * 5
+	; Child window to put user1's card
+	WinChildX1		DWORD	417
+	WinChildY1		DWORD	178
+	; Child window to put user2's card
+	WinChildX2		DWORD	280
+	WinChildY2		DWORD	145
+	; Child window to put user3's card
+	WinChildX3		DWORD	554
+	WinChildY3		DWORD	145
+	; Child window to put user4's card
+	WinChildX4		DWORD	150
+	WinChildY4		DWORD	70
+	; Child window to put user5's card
+	WinChildX5		DWORD	684
+	WinChildY5		DWORD	70
+
+	CardWidth		DWORD	73
+	CardHeight		DWORD	98
+
+	CARDTYPE1		DWORD	0
+	CARDTYPE2		DWORD	1
+	CARDTYPE3		DWORD	2
+	CARDTYPE4		DWORD	3
+
+	; upper-left, upper-right, lower-left 
+	USER1			POINT <20,0>,<93,10>,<0,98>
 
 
 .data
@@ -81,10 +112,16 @@ SetColors           PROTO   STDCALL :DWORD
 	temp			dd	0
 
 
+
 .data?
 	hInstance			dd		?
 	hMenu				dd		?
 	hStatic             dd		?
+	hUserWin1			dd		?
+	hUserWin2			dd		?
+	hUserWin3			dd		?
+	hUserWin4			dd		?
+	hUserWin5			dd		?
 	hStatus             dd		?
 	hToolbar			dd      ?
 	BackBufferDC        dd		?
@@ -100,6 +137,9 @@ SetColors           PROTO   STDCALL :DWORD
 	Buffer				db      200 dup (?)
 	CardDC				dd		?
 	hCard				dd		?
+	mainhdc				dd		?
+	hMemDC				dd		?
+	User1DC				dd		?
 
 
 .code
@@ -107,7 +147,6 @@ start:
 	; Get module handle and save it
 	invoke 	GetModuleHandle, NULL
 	mov 	hInstance, eax
-	invoke LoadBitmap,hInstance,BMP_TABLE
 	
 	; Init Common Controls library
 	invoke	InitCommonControls
@@ -134,12 +173,47 @@ LOCAL DefaultFont:DWORD
 	invoke  SendMessage, hStatus, WM_SETFONT, DefaultFont, TRUE
 	invoke  SendMessage, hStatus, SB_SETPARTS,3, ADDR StatusParts
 	
-	; Create static window for mosaic:
+	; Create static window for dealer card:
 	invoke  CreateWindowEx, WS_EX_CLIENTEDGE, ADDR ClassStatic, NULL,\
 	        WS_VISIBLE + WS_CHILD + SS_OWNERDRAW    ,\
 	        WinChildX, WinChildY, WinChildWidth, WinChildHeight,\
 	        hWnd, CID_STATIC, hInstance, NULL
 	mov     hStatic, eax
+
+	; Create static window for user1 cards:
+	invoke  CreateWindowEx, WS_EX_CLIENTEDGE, ADDR ClassStatic, NULL,\
+	        WS_VISIBLE + WS_CHILD + SS_OWNERDRAW    ,\
+	        WinChildX1, WinChildY1, WinCardWidth, WinCardHeight,\
+	        hWnd, CID_USERWIN1, hInstance, NULL
+	mov     hUserWin1, eax
+
+	; Create static window for user2 cards:
+	invoke  CreateWindowEx, WS_EX_CLIENTEDGE, ADDR ClassStatic, NULL,\
+	        WS_VISIBLE + WS_CHILD + SS_OWNERDRAW    ,\
+	        WinChildX2, WinChildY2, WinCardWidth, WinCardHeight,\
+	        hWnd, CID_USERWIN2, hInstance, NULL
+	mov     hUserWin2, eax
+
+	; Create static window for user3 cards:
+	invoke  CreateWindowEx, WS_EX_CLIENTEDGE, ADDR ClassStatic, NULL,\
+	        WS_VISIBLE + WS_CHILD + SS_OWNERDRAW    ,\
+	        WinChildX3, WinChildY3, WinCardWidth, WinCardHeight,\
+	        hWnd, CID_USERWIN3, hInstance, NULL
+	mov     hUserWin3, eax
+
+	; Create static window for user cards:
+	invoke  CreateWindowEx, WS_EX_CLIENTEDGE, ADDR ClassStatic, NULL,\
+	        WS_VISIBLE + WS_CHILD + SS_OWNERDRAW    ,\
+	        WinChildX4, WinChildY4, WinCardWidth, WinCardHeight,\
+	        hWnd, CID_USERWIN4, hInstance, NULL
+	mov     hUserWin4, eax
+
+	; Create static window for user cards:
+	invoke  CreateWindowEx, WS_EX_CLIENTEDGE, ADDR ClassStatic, NULL,\
+	        WS_VISIBLE + WS_CHILD + SS_OWNERDRAW    ,\
+	        WinChildX5, WinChildY5, WinCardWidth, WinCardHeight,\
+	        hWnd, CID_USERWIN5, hInstance, NULL
+	mov     hUserWin5, eax
 	
 	; Create toolbar:
 	invoke  CreateToolbarEx, hWnd, WS_CHILD + WS_VISIBLE + TBSTYLE_FLAT + WS_BORDER,\
@@ -202,7 +276,7 @@ WinMain endp
 WndProc proc	hWnd:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
 	LOCAL ps:PAINTSTRUCT 
 	LOCAL hdc:HDC 
-	LOCAL hMemDC:HDC 
+	;LOCAL hMemDC:HDC 
 	LOCAL rect:RECT 
 	mov eax, uMsg
 	.IF 	eax==WM_CREATE
@@ -211,17 +285,22 @@ WndProc proc	hWnd:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
 		invoke InitGame, hWnd
 		invoke LoadBitmap,hInstance,BMP_TABLE
 		mov hTable,eax
+
 	.ELSEIF	eax==WM_PAINT
 		invoke BeginPaint,hWnd,addr ps 
 		mov    hdc,eax 
+		mov	   mainhdc,eax
 		invoke CreateCompatibleDC,hdc 
 		mov    hMemDC,eax 
 		invoke SelectObject,hMemDC,hTable
 		invoke GetClientRect,hWnd,addr rect 
 
-		invoke BitBlt,hdc,0,0,rect.right,rect.bottom,hMemDC,0,0,SRCCOPY 
-		invoke DeleteDC,hMemDC 
+		invoke BitBlt,hdc,0,0,rect.right,rect.bottom,hMemDC,0,0,SRCCOPY
+		invoke DeleteDC,hMemDC
 		invoke EndPaint,hWnd,addr ps 
+
+
+
 	.ELSEIF eax==WM_COMMAND
 		mov 	eax, wParam
 		shr 	ax, 16
@@ -237,12 +316,21 @@ WndProc proc	hWnd:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
             push    ebx
             mov     ebx, lParam
             assume  ebx:ptr DRAWITEMSTRUCT
+            invoke  DealerDraw, hWnd, [ebx].hdc
+            assume  ebx:nothing
+            pop     ebx
+            xor     eax, eax
+            inc     eax
+		.ELSEIF     eax==CID_USERWIN1 || eax==CID_USERWIN2 || eax==CID_USERWIN3 || eax==CID_USERWIN4 || eax==CID_USERWIN5
+            push    ebx
+            mov     ebx, lParam
+            assume  ebx:ptr DRAWITEMSTRUCT
             invoke  DrawProc, hWnd, [ebx].hdc
             assume  ebx:nothing
             pop     ebx
             xor     eax, eax
             inc     eax
-        .ELSE
+		.ELSE
             xor     eax, eax
         .ENDIF
 	.ELSE
@@ -390,13 +478,13 @@ ProcessMenuItems endp
 ;======================================================================
 DrawCard proc hWnd:DWORD, wParam:DWORD
 	mov		eax, wParam
-	invoke GetRandomNumber,10
+	invoke GetRandomNumber,13
 	invoke crt_printf,addr DebugStr,eax
 	
     invoke  CreateCompatibleDC, NULL
     mov     CardDC, eax
 
-	invoke LoadBitmap,hInstance,BMP_CARD_A1
+	invoke LoadBitmap,hInstance,BMP_CARD
 	mov hCard,eax
 	invoke SelectObject,CardDC,hCard
 
@@ -592,14 +680,54 @@ ret
 CreateTiles endp
 
 ;======================================================================
+;                           Dealer Draw 2 Cards
+;======================================================================
+DealerDraw proc uses ebx edi esi hWnd:DWORD, hDC:DWORD
+	invoke GetRandomNumber,13
+	invoke DisplayCard, hWnd, hDC, 9, 9, CARDTYPE1, eax
+	invoke GetRandomNumber,13
+	invoke DisplayCard, hWnd, hDC, CardWidth, 20, CARDTYPE2, eax
+ret
+DealerDraw endp
+
+;======================================================================
 ;                           Draw Numbers
 ;======================================================================
 DrawProc proc uses ebx edi esi hWnd:DWORD, hDC:DWORD
-	invoke crt_printf,addr DebugStr,100
-    ;invoke  BitBlt, hDC, 9, 9, 220, 220, ImageDC, 0, 0, SRCCOPY
-	invoke  BitBlt, hDC, 9, 9, 220, 220, CardDC, 0, 0, SRCCOPY
+	invoke GetRandomNumber,13
+	invoke DisplayCard, hWnd, hDC, 3, 3, CARDTYPE1, eax
+	invoke GetRandomNumber,13
+	invoke DisplayCard, hWnd, hDC, 3, 33, CARDTYPE2, eax
 ret
 DrawProc endp
+
+;======================================================================
+;                           Display a Card
+;======================================================================
+; cardType	: CARDTYPE1,2,3,4
+; cardNum	: 0 ~ 12
+DisplayCard proc uses ebx edi esi eax edx hWnd:DWORD, hDC:DWORD, leftTopX:DWORD, leftTopY:DWORD, cardType:DWORD, cardNum:DWORD
+	LOCAL X:DWORD
+	LOCAL Y:DWORD
+
+	; compute X pos
+	mov eax,CardWidth
+	mul cardNum
+	mov X,eax
+
+	; compute Y pos
+	mov eax,CardHeight
+	mul cardType
+	mov Y,eax
+
+	invoke  BitBlt, hDC, leftTopX, leftTopY, CardWidth, CardHeight, CardDC, X, Y, SRCCOPY
+
+	;mov esi,OFFSET USER1
+	;invoke PlgBlt,hDC,esi,CardDC,0,0,CardWidth,CardHeight,NULL,0,0
+	
+
+ret
+DisplayCard endp
 
 ;======================================================================
 ;                           InitGame

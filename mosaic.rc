@@ -27,6 +27,7 @@
 
 #define 		BMP_TABLE			200
 #define			BMP_CARD_A1			201
+#define			BMP_CARD 			202
 
 
 ICON1_BIG       ICON    DISCARDABLE     "resources\\big.ico"
@@ -37,6 +38,7 @@ BMP_TOOLBAR		BITMAP  DISCARDABLE "resources\\toolbar.bmp"
 BMP_DEMOBITMAP	BITMAP  DISCARDABLE	"resources\\demo.bmp"
 BMP_TABLE		BITMAP	DISCARDABLE "resources\\table.bmp"
 BMP_CARD_A1		BITMAP	DISCARDABLE "resources\\a1.bmp"
+BMP_CARD 		BITMAP	DISCARDABLE	"resources\\card.bmp"
 
 
 
