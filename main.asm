@@ -34,8 +34,10 @@ SetBitmap			PROTO	STDCALL	:DWORD, :DWORD
 GetCoordinates		PROTO	STDCALL	:DWORD
 DrawNumbers			PROTO	STDCALL
 CreateTiles			PROTO	STDCALL
-DrawProc			PROTO   STDCALL :DWORD, :DWORD
+DrawProc			PROTO   STDCALL :DWORD, :DWORD, :DWORD
+DrawOneMore			PROTO   STDCALL :DWORD, :DWORD, :DWORD
 DealerDraw			PROTO   STDCALL :DWORD, :DWORD
+DealerDrawOneMore	PROTO   STDCALL :DWORD, :DWORD
 InitGame			PROTO   STDCALL :DWORD
 SetColors           PROTO   STDCALL :DWORD
 DisplayCard			PROTO	STDCALL :DWORD, :DWORD, :DWORD, :DWORD, :DWORD, :DWORD
@@ -52,7 +54,7 @@ DisplayCard			PROTO	STDCALL :DWORD, :DWORD, :DWORD, :DWORD, :DWORD, :DWORD
 	WinChildHeight	DWORD	128	; CardHeight + 30
 	; User card window
 	WinCardWidth	DWORD	83	; CardWidth + 2 * 5
-	WinCardHeight	DWORD	138	; CardHeight + 30 + 2 * 5
+	WinCardHeight	DWORD	168	; CardHeight + 30 * 2 + 2 * 5
 	; Child window to put user1's card
 	WinChildX1		DWORD	417
 	WinChildY1		DWORD	178
@@ -72,10 +74,7 @@ DisplayCard			PROTO	STDCALL :DWORD, :DWORD, :DWORD, :DWORD, :DWORD, :DWORD
 	CardWidth		DWORD	73
 	CardHeight		DWORD	98
 
-	CARDTYPE1		DWORD	0
-	CARDTYPE2		DWORD	1
-	CARDTYPE3		DWORD	2
-	CARDTYPE4		DWORD	3
+	ButtonID		equ		1
 
 	; upper-left, upper-right, lower-left 
 	USER1			POINT <20,0>,<93,10>,<0,98>
@@ -109,7 +108,10 @@ DisplayCard			PROTO	STDCALL :DWORD, :DWORD, :DWORD, :DWORD, :DWORD, :DWORD
 	randomSeed		dd	100711433
 	NumberFormat    db      "%lu",0
 	Rect200         RECT    <0,0,200,200>
-	temp			dd	0
+	drawFlag			db	0
+	ButtonClassName	db "button",0
+	ButtonText1		db "Stay",0
+	ButtonText2		db "Draw",0
 
 
 
@@ -140,6 +142,8 @@ DisplayCard			PROTO	STDCALL :DWORD, :DWORD, :DWORD, :DWORD, :DWORD, :DWORD
 	mainhdc				dd		?
 	hMemDC				dd		?
 	User1DC				dd		?
+	temp				dd		6 dup (?)
+	hwndButton			HWND	?
 
 
 .code
@@ -221,6 +225,11 @@ LOCAL DefaultFont:DWORD
 	            8, 32, 32, 32, 32, SIZEOF TBBUTTON
 	mov     hToolbar, eax
 	invoke  SendMessage, eax, TB_AUTOSIZE, NULL, NULL
+
+	invoke CreateWindowEx,NULL, ADDR ButtonClassName,ADDR ButtonText1,\ 
+				WS_CHILD or WS_VISIBLE or BS_DEFPUSHBUTTON,\ 
+		        300,500,140,25,hWnd,ButtonID,hInstance,NULL 
+    mov  hwndButton,eax
 	
 ret
 InitControls endp
@@ -297,15 +306,20 @@ WndProc proc	hWnd:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
 
 		invoke BitBlt,hdc,0,0,rect.right,rect.bottom,hMemDC,0,0,SRCCOPY
 		invoke DeleteDC,hMemDC
-		invoke EndPaint,hWnd,addr ps 
-
-
+		invoke EndPaint,hWnd,addr ps
 
 	.ELSEIF eax==WM_COMMAND
 		mov 	eax, wParam
-		shr 	ax, 16
-		.IF		ax==0 ; menu notification
-			invoke	ProcessMenuItems, hWnd, wParam
+		.IF ax==ButtonID
+			shr ax,16
+			.IF ax==BN_CLICKED
+				invoke crt_printf, addr DebugStr, 111
+			.ENDIF
+		.ELSE
+			shr 	ax, 16
+			.IF		ax==0 ; menu notification
+				invoke	ProcessMenuItems, hWnd, wParam
+			.ENDIF
 		.ENDIF
 	.ELSEIF	eax==WM_DESTROY
 		invoke  DeleteBitmaps
@@ -316,7 +330,11 @@ WndProc proc	hWnd:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
             push    ebx
             mov     ebx, lParam
             assume  ebx:ptr DRAWITEMSTRUCT
-            invoke  DealerDraw, hWnd, [ebx].hdc
+			.IF drawFlag==0
+				invoke  DealerDraw, hWnd, [ebx].hdc
+			.ELSE
+				invoke	DealerDrawOneMore, hWnd, [ebx].hdc
+			.ENDIF
             assume  ebx:nothing
             pop     ebx
             xor     eax, eax
@@ -325,7 +343,11 @@ WndProc proc	hWnd:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
             push    ebx
             mov     ebx, lParam
             assume  ebx:ptr DRAWITEMSTRUCT
-            invoke  DrawProc, hWnd, [ebx].hdc
+			.IF drawFlag==0
+				invoke  DrawProc, hWnd, [ebx].hdc, eax
+			.ELSE
+				invoke DrawOneMore, hWnd, [ebx].hdc, eax
+			.ENDIF
             assume  ebx:nothing
             pop     ebx
             xor     eax, eax
@@ -404,12 +426,25 @@ ProcessMenuItems proc hWnd:DWORD, wParam:DWORD
 	.IF ax==MI_OPENBITMAP
 		;--- delete old image ---
         invoke  DeleteObject, CardDC
+		invoke	DeleteObject, temp
+		invoke	DeleteObject, [temp + 4]
+		invoke	DeleteObject, [temp + 8]
+		invoke	DeleteObject, [temp + 12]
+		invoke	DeleteObject, [temp + 16]
+		invoke	DeleteObject, [temp + 20]
 		invoke	InvalidateRect, hWnd, NULL, FALSE
 	;-------------------------------------------------------------------------------
 	; New game
 	;-------------------------------------------------------------------------------
 	.ELSEIF ax==MI_NEWGAME
+		mov drawFlag,0
 		invoke	DrawCard, hWnd, 1
+		invoke	InvalidateRect, hWnd, NULL, FALSE	
+	;-------------------------------------------------------------------------------
+	; Draw One More
+	;-------------------------------------------------------------------------------
+	.ELSEIF ax==MI_ABOUT
+		mov drawFlag,1
 		invoke	InvalidateRect, hWnd, NULL, FALSE	
 	;-------------------------------------------------------------------------------
 	; Image type
@@ -478,16 +513,26 @@ ProcessMenuItems endp
 ;======================================================================
 DrawCard proc hWnd:DWORD, wParam:DWORD
 	mov		eax, wParam
-	invoke GetRandomNumber,13
-	invoke crt_printf,addr DebugStr,eax
 	
     invoke  CreateCompatibleDC, NULL
     mov     CardDC, eax
+	invoke  CreateCompatibleDC, NULL
+    mov     temp, eax
+	invoke  CreateCompatibleDC, NULL
+    mov     [temp+4], eax
+	invoke  CreateCompatibleDC, NULL
+    mov     [temp+8], eax
+	invoke  CreateCompatibleDC, NULL
+    mov     [temp+12], eax
+	invoke  CreateCompatibleDC, NULL
+    mov     [temp+16], eax
+	invoke  CreateCompatibleDC, NULL
+    mov     [temp+20], eax
 
 	invoke LoadBitmap,hInstance,BMP_CARD
 	mov hCard,eax
+	
 	invoke SelectObject,CardDC,hCard
-
 ret
 DrawCard endp
 
@@ -541,9 +586,9 @@ SetBitmap   proc hWnd:DWORD, ImageType:DWORD
         ;--- Select new bitmap in DC ---
         invoke  SelectObject, ImageDC, hImage
         ;--- Draw numbers on the bitmap ---
-        invoke  DrawNumbers
+        ;invoke  DrawNumbers
         ;--- Create the 3D effect on the bitmap ---
-        invoke  CreateTiles
+        ;invoke  CreateTiles
     ;.ENDIF
     ;--- Set the new image type ---
     mov     eax, ImageType
@@ -552,154 +597,103 @@ ret
 SetBitmap   endp
 
 ;======================================================================
-;                           Draw Numbers
-;======================================================================
-DrawNumbers proc uses ebx edi
-LOCAL   TempRect:RECT
-    ; --- Set the textcolor of ImageDC to TextColor ---
-    invoke  SetTextColor, ImageDC, TextColor
-    ; --- Fill the imageDC with the tile color brush ---
-    invoke  FillRect, ImageDC, ADDR Rect200, hTileColor
-    ; --- Set the background mode to transparent (for the text) ---
-    invoke  SetBkMode, ImageDC, TRANSPARENT
-
-    ; --- Loop through all the numbers and draw them one by one ---
-    xor     ebx, ebx
-    .WHILE  ebx<16
-        mov     eax, ebx
-        inc     eax
-        invoke  GetCoordinates, eax
-        mov     dx, ax      ; dx  = row
-        shr     eax, 16     ; ax  = column
-        and     edx, 0ffffh ; make sure that edx = dx
-        imul    edx, edx, 50;} Multipy edx as well as eax with 50
-        imul    eax, 50     ;}
-        mov     TempRect.left, eax
-        mov     TempRect.top, edx
-        add     eax, 50
-        add     edx, 50
-        mov     TempRect.right, eax
-        mov     TempRect.bottom, edx
-        mov     eax, ebx
-        inc     eax
-        invoke  wsprintf, ADDR Buffer, ADDR NumberFormat, eax
-        invoke  DrawText, ImageDC, ADDR Buffer, -1, ADDR TempRect,\
-                DT_CENTER or DT_SINGLELINE or DT_VCENTER
-    inc ebx
-    .ENDW
-ret
-DrawNumbers endp
-
-;======================================================================
-;                           GetCoordinates
-;======================================================================
-GetCoordinates proc dwTile:DWORD
-    mov     eax, dwTile
-    dec     eax
-    cdq
-    mov     ecx, 4
-    div     ecx
-    ;eax=quotient = row
-    ;edx=remainder = column
-    shl     edx, 16
-    add     eax, edx
-ret
-GetCoordinates endp
-
-;======================================================================
-;                           Create Tiles
-;======================================================================
-CreateTiles proc uses ebx esi edi
-    invoke  GetStockObject, BLACK_PEN
-    invoke  SelectObject, ImageDC, eax
-; Dark lines, vertical. x = 50k - 1 (k=1,2,3,4)
-; ebx = k
-; esi = x
-    xor     ebx, ebx
-    inc     ebx
-    ; ebx is 1 now
-
-    .WHILE  ebx<5   ; (ebx= 1,2,3,4)
-        mov     eax, 50
-        mul     ebx
-        mov     esi, eax
-        dec     esi
-        invoke  MoveToEx, ImageDC, esi, 0, NULL
-        invoke  LineTo, ImageDC, esi, 199
-    inc ebx
-    .ENDW
-
-; Dark lines, horizontal. y = 50k - 1 (k=1,2,3,4)
-; ebx = k
-; esi = y
-    xor     ebx, ebx
-    inc     ebx
-    ; ebx is 1 now
-    .WHILE  ebx<5   ; (ebx= 1,2,3,4)
-        mov     eax, 50
-        mul     ebx
-        mov     esi, eax
-        dec     esi
-        invoke  MoveToEx, ImageDC, 0, esi, NULL
-        invoke  LineTo, ImageDC, 199, esi
-    inc ebx
-    .ENDW
-    invoke  GetStockObject, WHITE_PEN
-    invoke  SelectObject, ImageDC, eax
-; Light lines, vertical. x = 50k  (k=0,1,2,3)
-; ebx = k
-; esi = x
-    xor     ebx, ebx
-
-    .WHILE  ebx<4   ; (ebx= 0,1,2,3)
-        mov     eax, 50
-        mul     ebx
-        mov     esi, eax
-        invoke  MoveToEx, ImageDC, esi, 0, NULL
-        invoke  LineTo, ImageDC, esi, 199
-    inc ebx
-    .ENDW
-
-; Light lines, horizontal. y = 50k (k=0,1,2,3)
-; ebx = k
-; esi = y
-    xor     ebx, ebx
-
-    ; ebx is 1 now
-
-    .WHILE  ebx<4   ; (ebx= 0,1,2,3)
-        mov     eax, 50
-        mul     ebx
-        mov     esi, eax
-        invoke  MoveToEx, ImageDC, 0, esi, NULL
-        invoke  LineTo, ImageDC, 199, esi
-    inc ebx
-    .ENDW
-
-ret
-CreateTiles endp
-
-;======================================================================
 ;                           Dealer Draw 2 Cards
 ;======================================================================
 DealerDraw proc uses ebx edi esi hWnd:DWORD, hDC:DWORD
+LOCAL cardType:DWORD
+	; create bitmap object for memoryDC
+	invoke  CreateCompatibleBitmap, hDC, WinChildWidth, WinChildHeight
+	invoke SelectObject, temp, eax
+
+	; the first card
+	invoke GetRandomNumber,4
+	mov cardType,eax
 	invoke GetRandomNumber,13
-	invoke DisplayCard, hWnd, hDC, 9, 9, CARDTYPE1, eax
+	invoke DisplayCard, hWnd, temp, 9, 9, cardType, eax
+
+	; the second card
+	invoke GetRandomNumber,4
+	mov cardType,eax
 	invoke GetRandomNumber,13
-	invoke DisplayCard, hWnd, hDC, CardWidth, 20, CARDTYPE2, eax
+	invoke DisplayCard, hWnd, temp, 39, 19, cardType, eax
+		
+	invoke  BitBlt, hDC, 0, 0, WinChildWidth, WinChildHeight, temp, 0, 0, SRCCOPY
 ret
 DealerDraw endp
 
 ;======================================================================
-;                           Draw Numbers
+;                           Dealer Draw One More
 ;======================================================================
-DrawProc proc uses ebx edi esi hWnd:DWORD, hDC:DWORD
+DealerDrawOneMore proc uses ebx edi esi hWnd:DWORD, hDC:DWORD
+LOCAL cardType:DWORD
+	invoke GetRandomNumber,4
+	mov cardType,eax
 	invoke GetRandomNumber,13
-	invoke DisplayCard, hWnd, hDC, 3, 3, CARDTYPE1, eax
+	invoke DisplayCard, hWnd, temp, 69, 29, cardType, eax
+
+	invoke  BitBlt, hDC, 0, 0, WinChildWidth, WinChildHeight, temp, 0, 0, SRCCOPY
+ret
+DealerDrawOneMore endp
+
+;======================================================================
+;                           User Draw Cards
+;======================================================================
+DrawProc proc uses ebx edi esi hWnd:DWORD, hDC:DWORD, userID:DWORD
+LOCAL cardType:DWORD
+LOCAL index:DWORD
+	sub userID,602
+	mov eax,userID
+	mov ebx,SIZEOF DWORD
+	mul ebx
+	mov index,eax
+	invoke crt_printf, addr DebugStr, index
+
+	; create bitmap object for memoryDC
+	invoke  CreateCompatibleBitmap, hDC, WinCardWidth, WinCardHeight
+	mov ebx,index
+	invoke SelectObject, [temp+ebx], eax
+
+	; the first card
+	invoke GetRandomNumber,4
+	mov cardType,eax
 	invoke GetRandomNumber,13
-	invoke DisplayCard, hWnd, hDC, 3, 33, CARDTYPE2, eax
+	mov ebx,index
+	invoke DisplayCard, hWnd, [temp+ebx], 3, 3, cardType, eax
+
+	; the second card
+	invoke GetRandomNumber,4
+	mov cardType,eax
+	invoke GetRandomNumber,13
+	mov ebx,index
+	invoke DisplayCard, hWnd, [temp+ebx], 3, 33, cardType, eax
+
+	mov ebx,index
+	invoke  BitBlt, hDC, 0, 0, WinCardWidth, WinCardHeight, [temp+ebx], 0, 0, SRCCOPY
 ret
 DrawProc endp
+
+;======================================================================
+;                           User Draw One More
+;======================================================================
+DrawOneMore proc uses ebx edi esi hWnd:DWORD, hDC:DWORD, userID:DWORD
+LOCAL cardType:DWORD
+LOCAL index:DWORD
+	sub userID,602
+	mov eax,userID
+	mov ebx,SIZEOF DWORD
+	mul ebx
+	mov index,eax
+
+	invoke GetRandomNumber,4
+	mov cardType,eax
+	invoke GetRandomNumber,13
+	mov ebx,index
+	invoke DisplayCard, hWnd, [temp+ebx], 3, 63, cardType, eax
+
+	mov ebx,index
+	invoke  BitBlt, hDC, 0, 0, WinCardWidth, WinCardHeight, [temp+ebx], 0, 0, SRCCOPY
+ret
+DrawOneMore endp
 
 ;======================================================================
 ;                           Display a Card
@@ -719,7 +713,7 @@ DisplayCard proc uses ebx edi esi eax edx hWnd:DWORD, hDC:DWORD, leftTopX:DWORD,
 	mov eax,CardHeight
 	mul cardType
 	mov Y,eax
-
+	
 	invoke  BitBlt, hDC, leftTopX, leftTopY, CardWidth, CardHeight, CardDC, X, Y, SRCCOPY
 
 	;mov esi,OFFSET USER1

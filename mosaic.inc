@@ -9,9 +9,9 @@ EASY				equ		20
 MEDIUM				equ		80
 HARD				equ		200
 
-CID_TOOLBAR			equ		602
-CID_STATIC 			equ		601
 CID_STATUS 			equ 	600
+CID_TOOLBAR			equ		601
+CID_STATIC 			equ		602
 CID_USERWIN1		equ		603
 CID_USERWIN2		equ		604
 CID_USERWIN3		equ		605
