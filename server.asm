@@ -11,6 +11,7 @@ includelib	\masm32\lib\user32.lib
 includelib	\masm32\lib\gdi32.lib
 includelib	\masm32\lib\comctl32.lib
 includelib	\masm32\lib\comdlg32.lib
+
 include		\masm32\include\wsock32.inc
 include		\masm32\include\kernel32.inc
 include		\masm32\include\comctl32.inc
@@ -88,22 +89,6 @@ DisplayCard			PROTO	STDCALL :DWORD, :DWORD, :DWORD, :DWORD, :DWORD, :DWORD
 	ClassStatic         db      "STATIC",0
 	StatusParts         dd      90, 170, -1
 	DefaultStatusText   db      "Blackjack 1.0",0
-	ToolbarButtons  TBBUTTON <0, MI_OPENBITMAP, TBSTATE_ENABLED, \
-	                          TBSTYLE_BUTTON, 0, NULL, NULL>
-	                TBBUTTON <1, MI_NEWGAME, TBSTATE_ENABLED, \
-	                          TBSTYLE_BUTTON,0, NULL, NULL>
-	                TBBUTTON <NULL, NULL, NULL, \
-	                          TBSTYLE_SEP, NULL, NULL> ;--- separator
-	                TBBUTTON <2, MI_USESTANDARD, TBSTATE_ENABLED or TBSTATE_CHECKED, \
-	                          TBSTYLE_CHECKGROUP,0, NULL, NULL>
-	                TBBUTTON <3, MI_USENUMBERS, TBSTATE_ENABLED, \
-	                          TBSTYLE_CHECKGROUP,0, NULL, NULL>
-	                TBBUTTON <4, MI_USEFILE, TBSTATE_ENABLED, \
-	                          TBSTYLE_CHECKGROUP,0, NULL, NULL>
-	                TBBUTTON <NULL, NULL, NULL, \
-	                          TBSTYLE_SEP, NULL, NULL> ;--- separator
-	                TBBUTTON <5, MI_ABOUT, TBSTATE_ENABLED, \
-	                          TBSTYLE_BUTTON,0, NULL, NULL>
 	FontFace            db  "Arial",0
 	DebugStr			BYTE	"debug: %d",0ah,0dh,0
 	randomState		dd	0
@@ -117,6 +102,17 @@ DisplayCard			PROTO	STDCALL :DWORD, :DWORD, :DWORD, :DWORD, :DWORD, :DWORD
 	wsadata WSADATA <>
 	sock dd ?
 	sockList DWORD 4 DUP(0)
+	ScoreD	DWORD		3	DUP (-1)
+	ScoreP	DWORD		12	DUP (0)
+	ScoreT	DWORD		5	DUP (-1)
+	TempScore1 DWORD		0
+	TempScore2 DWORD		0
+	TempScore3 DWORD		0
+	TempScore4 DWORD		0
+	TotalScore DWORD	5	DUP (0)
+	DTotalScore DWORD	0
+	CountArray	DWORD	0
+	ResultOfGame	DWORD 0
 	hMemory dd ?
 	buffer BYTE 10 DUP(1)
 	rbuffer BYTE 10 DUP(0)
@@ -127,6 +123,7 @@ DisplayCard			PROTO	STDCALL :DWORD, :DWORD, :DWORD, :DWORD, :DWORD, :DWORD
 	nofp_comment BYTE "nofp:%d", 0dh, 0ah, 0
 	debug_comment BYTE "send:%d", 0dh, 0ah, 0
 	connect_comment BYTE "Player[%d] connected.", 0dh, 0ah, 0
+	test_comment BYTE "[%d]  [%d]", 0dh, 0ah, 0
 	setnumber_comment BYTE "Please set the number of players(Max:5,Min:1)", 0dh, 0ah, 0
 	wait_comment BYTE "Please wait for players join the game",0dh,0ah,0
 	warning BYTE "The number does not meet the requirements.", 0dh, 0ah, 0
@@ -159,6 +156,8 @@ DisplayCard			PROTO	STDCALL :DWORD, :DWORD, :DWORD, :DWORD, :DWORD, :DWORD
 	hTable				dd		?
 	CurImageType        dd      ?
 	Buffer				db      200 dup (?)
+
+	CountScore			dd		0
 	CardDC				dd		?
 	hCard				dd		?
 	mainhdc				dd		?
@@ -216,23 +215,18 @@ ThreadRecvDraw PROC, k:DWORD;;Ô»‚•ÍÛ??Ï—È©ıŒ¯´
 	.if k == 0
 		mov eax,yesorno
 		mov ifdrawU1,eax
-		invoke crt_printf,addr DebugStr,ifdrawU1
 	.elseif k == 1
 		mov eax,yesorno
 		mov ifdrawU2,eax
-		invoke crt_printf,addr DebugStr,ifdrawU2
 	.elseif k == 2
 		mov eax,yesorno
 		mov ifdrawU3,eax
-		invoke crt_printf,addr DebugStr,ifdrawU3
 	.elseif k == 3
 		mov eax,yesorno
 		mov ifdrawU4,eax
-		invoke crt_printf,addr DebugStr,ifdrawU4
 	.else 
 		mov eax,yesorno
 		mov ifdrawU5,eax
-		invoke crt_printf,addr DebugStr,ifdrawU5
 	.endif
 	inc cntconn
 	ret
@@ -315,7 +309,7 @@ mov ebx,0
 	invoke send,sockList[ebx * 4],addr nofp,20,0
 	inc ebx
 .endw
-invoke crt_printf,addr debug_comment,nofp
+
 
 mov ebx,0
 .while bl < nofp
@@ -323,7 +317,7 @@ mov ebx,0
 	inc ebx
 .endw
 
-invoke crt_printf,addr nofp_comment,nofp
+
 
 mov ebx,0
 mov bl,nofp
@@ -333,54 +327,86 @@ mov bl,nofp
 		.BREAK
 	.ENDIF
 .endw
-invoke crt_printf,addr DebugStr,nofp
+
 
 mov ebx,0
 invoke GetRandomNumber,4
 mov CT,eax
 invoke send_all,CT
+
+
 invoke GetRandomNumber,13
 mov CN,eax
 invoke send_all,CN
-invoke crt_printf,addr debug_comment,sbf
+mov eax,CN
+.if eax >= 10
+	mov ScoreD[0 * 4],9
+.else
+	mov ScoreD[0 * 4],eax
+.endif
+
+invoke crt_printf,addr debug_comment,ScoreD[0 * 4]
 
 invoke GetRandomNumber,4
 mov CT,eax
 invoke send_all,CT
-invoke crt_printf,addr debug_comment,sbf
+
+
 invoke GetRandomNumber,13
 mov CN,eax
 invoke send_all,CN
-invoke crt_printf,addr debug_comment,sbf
+mov eax,CN
+.if eax >= 10
+	mov ScoreD[1 * 4],9
+.else
+	mov ScoreD[1 * 4],eax
+.endif
+
 
 mov cnt,0
 mov ebx,0
-invoke crt_printf,addr nofp_comment,nofp
+mov CountScore,0
+
 .while	bl < nofp
 	invoke GetRandomNumber,4
 	mov CT,eax
 	invoke send_all,CT
-	invoke crt_printf,addr debug_comment,sbf
+
 
 	invoke GetRandomNumber,13
 	mov CN,eax
+	mov ebx,CountScore
+	.if eax >= 10
+		mov ScoreP[ebx * 4],9
+	.else
+		mov ScoreP[ebx * 4],eax
+	.endif
+	invoke crt_printf,addr test_comment,ScoreP[ebx * 4],ebx
 	invoke send_all,CN
-	invoke crt_printf,addr debug_comment,sbf
+
 
 	invoke GetRandomNumber,4
 	mov CT,eax
 	invoke send_all,CT
-	invoke crt_printf,addr debug_comment,sbf
-
+		
+	inc CountScore
 	invoke GetRandomNumber,13
 	mov CN,eax
+	mov ebx,CountScore
+	.if eax >= 10
+		mov ScoreP[ebx * 4],9
+	.else
+		mov ScoreP[ebx * 4],eax
+	.endif
+	invoke crt_printf,addr test_comment,ScoreP[ebx * 4],ebx
 	invoke send_all,CN
-	invoke crt_printf,addr debug_comment,sbf
+
 	inc cnt
+	inc CountScore
 	mov bl,cnt
 	;invoke crt_printf,addr DebugStr,bl
 .endw
-invoke crt_printf,addr nofp_comment,nofp
+
 mov cntconn,0
 mov ebx,0
 .while bl < nofp
@@ -389,88 +415,247 @@ mov ebx,0
 .endw
 mov ebx,0
 mov bl,nofp
-invoke crt_printf,addr here_comment,ebx
-
+;Mark which player will draw cards
+invoke crt_printf,addr DebugStr,nofp
 .while TRUE
 	.IF (cntconn == ebx)
-		invoke send_all,1	
+		invoke send_all,1
 		.BREAK
 	.ENDIF
 .endw
 
 .if ifdrawU1 == 1
 	inc cntyes
+	mov ScoreT[0 * 4],1
 .endif
 invoke send_all,ifdrawU1
-invoke crt_printf,addr debug_comment,sbf
+
 .if playernum > 1
 	.if ifdrawU2 == 1
 		inc cntyes
+		mov ScoreT[1 * 4],1
 	.endif
 	invoke send_all,ifdrawU2
-	invoke crt_printf,addr debug_comment,sbf
+	
+
 .endif
 .if playernum > 2
 	.if ifdrawU3 == 1
 		inc cntyes
+		mov ScoreT[2 * 4],1
 	.endif
 	invoke send_all,ifdrawU3
-	invoke crt_printf,addr debug_comment,sbf
+
 .endif
 .if playernum > 3
 	.if ifdrawU4 == 1
 		inc cntyes
+		mov ScoreT[3 * 4],1
 	.endif
 	invoke send_all,ifdrawU4
-	invoke crt_printf,addr debug_comment,sbf
+
 .endif
 .if playernum > 4
 	.if ifdrawU5 == 1
 		inc cntyes
+		mov ScoreT[4 * 4],1
 	.endif
 	invoke send_all,ifdrawU5
-	invoke crt_printf,addr debug_comment,sbf
+
 .endif
-invoke crt_printf,addr string_comment,cntyes
+
+
+mov eax,ScoreD[0 * 4]
+.if eax == 0
+	add DTotalScore, 10
+.elseif 
+	add DTotalScore, eax
+.endif
+
+mov eax,ScoreD[1 * 4]
+.if eax == 0 && DTotalScore != 10
+	add DTotalScore, 10
+.elseif 
+	add DTotalScore, eax
+.endif
+
 
 invoke GetRandomNumber,4
 mov CT,eax
 invoke send_all,CT
-invoke crt_printf,addr debug_comment,sbf
 
-invoke GetRandomNumber,13
-mov CN,eax
-invoke send_all,CN
-invoke crt_printf,addr debug_comment,sbf
+.if DTotalScore < 14
+	invoke GetRandomNumber,13
+	mov CN,eax
+	invoke send_all,CN
+	mov eax,CN
+	.if eax >= 10
+		mov ScoreD[2 * 4],9
+	.else
+		mov ScoreD[2 * 4],eax
+	.endif
+	mov eax,ScoreD[2 * 4]
+	add DTotalScore,eax
+.elseif
+	invoke send_all,20
+	sub DTotalScore,1
+.endif
 
 mov ebx,0
 mov cnt,0
+mov CountScore,0
+mov CountArray,0
 .while ebx < cntyes
 	invoke GetRandomNumber,4
 	mov CT,eax
 	invoke send_all,CT
-	invoke crt_printf,addr debug_comment,sbf
 
+	
 	invoke GetRandomNumber,13
 	mov CN,eax
 	invoke send_all,CN
-	invoke crt_printf,addr debug_comment,sbf
+	
+	mov ebx,CountArray
+	.while ScoreT[ebx * 4] == -1
+		invoke crt_printf,addr DebugStr,ebx
+		inc ebx
+	.endw
+	mov CountArray,ebx
+	inc CountArray
+
+	mov eax,CN
+	.if eax >= 10
+		mov ScoreT[ebx * 4],9
+	.else
+		mov ScoreT[ebx * 4],eax
+	.endif
+	invoke crt_printf,addr test_comment,ScoreT[ebx * 4],ebx
+	
 	inc cnt
 	mov bl,cnt
 .endw
-;invoke recv,sockList[0],addr rbf,20,0
-;invoke crt_printf,addr string_comment,rbf
 
-;invoke GetRandomNumber,4
-;mov CT,eax
-;invoke send_all,CT
-;invoke crt_printf,addr debug_comment,sbf
+;==========
+mov ebx,0
+mov CountScore,0
+mov CountArray,0
+.while bl < nofp
+	mov TempScore1,0
+	mov TempScore2,0
+	mov TempScore3,0
+	mov TempScore4,0
 
-;invoke GetRandomNumber,13
-;mov CN,eax
-;invoke send_all,CN
-;invoke crt_printf,addr debug_comment,sbf
-invoke crt_printf,addr wait_comment,rbf
+;get all situations of score,and choose the biggest one
+	mov ebx,CountArray
+	mov eax,ScoreP[ebx * 4]
+	mov ebx,CountScore
+	add TotalScore[ebx * 4],eax
+	add TempScore2,eax
+	add TempScore3,eax
+	.if eax == 0
+		add TempScore1,10
+		add TempScore4,10
+	.elseif
+		add TempScore1,eax
+		add TempScore4,eax
+	.endif
+
+	inc ebx
+	inc CountArray
+	
+	mov ebx,CountArray
+	mov eax,ScoreP[ebx * 4]
+	mov ebx,CountScore
+	add TotalScore[ebx * 4],eax
+	add TempScore1,eax
+	add TempScore3,eax
+	.if eax == 0
+		add TempScore2,10
+		add TempScore4,10
+	.elseif 
+		add TempScore2,eax
+		add TempScore4,eax
+	.endif
+	
+	mov ebx,CountScore
+	mov eax,ScoreT[ebx * 4]
+	.if eax == -1
+		invoke crt_printf, ADDR warning
+		sub TotalScore[ebx * 4],1
+		sub TempScore3,1
+		sub TempScore1,1
+		sub TempScore2,1
+		sub TempScore4,1
+	.else
+		add TotalScore[ebx * 4],eax
+		add TempScore1,eax
+		add TempScore2,eax
+		add TempScore4,eax
+	.endif
+	.if eax == 0
+		add TempScore3,10
+	.elseif 
+		add TempScore3,eax
+	.endif
+	
+	
+	mov eax,TotalScore[ebx * 4]
+	.if ((TempScore1 > eax&&TempScore1 < 19))
+		mov eax,TempScore1
+		mov TotalScore[ebx * 4],eax
+	.endif
+
+	mov eax,TotalScore[ebx * 4]
+	.if (TempScore2 > eax&&TempScore2 < 19)
+		mov eax,TempScore2
+		mov TotalScore[ebx * 4],eax
+	.endif
+
+	mov eax,TotalScore[ebx * 4]
+	.if (TempScore3 > eax)&&(TempScore3 < 19)
+		mov eax,TempScore3
+		mov TotalScore[ebx * 4],eax
+	.endif
+
+	mov eax,TotalScore[ebx * 4]
+	.if (TempScore4 > eax)&&(TempScore4 < 19)
+		mov eax,TempScore4
+		mov TotalScore[ebx * 4],eax
+	.endif
+
+	invoke crt_printf,addr test_comment,TotalScore[ebx * 4],ebx
+	invoke crt_printf,addr test_comment,TempScore1,ebx
+	invoke crt_printf,addr test_comment,TempScore2,ebx
+	invoke crt_printf,addr test_comment,TempScore3,ebx
+	invoke crt_printf,addr test_comment,TempScore4,ebx
+	inc CountScore
+	inc CountArray
+	mov ebx,CountScore
+.endw
+invoke crt_printf,addr test_comment,DTotalScore,ebx
+;========
+mov ebx,0
+.while bl < nofp
+	mov eax,TotalScore[ebx]
+	.if eax > 18
+		invoke encode,3
+		invoke send,sockList[ebx * 4],addr sbf,20,0
+	.elseif 
+		mov eax,TotalScore[ebx]
+		.if DTotalScore > eax && DTotalScore < 19
+			invoke encode,3
+			invoke send,sockList[ebx * 4],addr sbf,20,0
+		.elseif DTotalScore == eax
+			invoke encode,2
+			invoke send,sockList[ebx * 4],addr sbf,20,0
+		.else
+			invoke encode,1
+			invoke send,sockList[ebx * 4],addr sbf,20,0
+		.endif
+	.endif
+	inc ebx
+.endw
+
 
 .while TRUE
 .endw
@@ -488,384 +673,7 @@ invoke crt_printf,addr wait_comment,rbf
     ;invoke  WinMain, hInstance, NULL, NULL, SW_SHOWNORMAL
 	invoke 	ExitProcess,eax
 
-;======================================================================
-;                           Init Controls
-;======================================================================
-InitControls proc hWnd:DWORD
-LOCAL DefaultFont:DWORD
-	;--- Create a static control ---
-	
-	;--- save default font ---
-	invoke  GetStockObject, DEFAULT_GUI_FONT
-	mov     DefaultFont, eax
-	
-	; Create statusbar window:
-	invoke  CreateStatusWindow, WS_CHILD + WS_VISIBLE,\
-	         ADDR DefaultStatusText, hWnd, CID_STATUS
-	mov     hStatus, eax
-	invoke  SendMessage, hStatus, WM_SETFONT, DefaultFont, TRUE
-	invoke  SendMessage, hStatus, SB_SETPARTS,3, ADDR StatusParts
-	
-	; Create static window for dealer card:
-	invoke  CreateWindowEx, WS_EX_CLIENTEDGE, ADDR ClassStatic, NULL,\
-	        WS_VISIBLE + WS_CHILD + SS_OWNERDRAW    ,\
-	        WinChildX, WinChildY, WinChildWidth, WinChildHeight,\
-	        hWnd, CID_STATIC, hInstance, NULL
-	mov     hStatic, eax
 
-	; Create static window for user1 cards:
-	invoke  CreateWindowEx, WS_EX_CLIENTEDGE, ADDR ClassStatic, NULL,\
-	        WS_VISIBLE + WS_CHILD + SS_OWNERDRAW    ,\
-	        WinChildX1, WinChildY1, WinCardWidth, WinCardHeight,\
-	        hWnd, CID_USERWIN1, hInstance, NULL
-	mov     hUserWin1, eax
-
-	; Create static window for user2 cards:
-	invoke  CreateWindowEx, WS_EX_CLIENTEDGE, ADDR ClassStatic, NULL,\
-	        WS_VISIBLE + WS_CHILD + SS_OWNERDRAW    ,\
-	        WinChildX2, WinChildY2, WinCardWidth, WinCardHeight,\
-	        hWnd, CID_USERWIN2, hInstance, NULL
-	mov     hUserWin2, eax
-
-	; Create static window for user3 cards:
-	invoke  CreateWindowEx, WS_EX_CLIENTEDGE, ADDR ClassStatic, NULL,\
-	        WS_VISIBLE + WS_CHILD + SS_OWNERDRAW    ,\
-	        WinChildX3, WinChildY3, WinCardWidth, WinCardHeight,\
-	        hWnd, CID_USERWIN3, hInstance, NULL
-	mov     hUserWin3, eax
-
-	; Create static window for user cards:
-	invoke  CreateWindowEx, WS_EX_CLIENTEDGE, ADDR ClassStatic, NULL,\
-	        WS_VISIBLE + WS_CHILD + SS_OWNERDRAW    ,\
-	        WinChildX4, WinChildY4, WinCardWidth, WinCardHeight,\
-	        hWnd, CID_USERWIN4, hInstance, NULL
-	mov     hUserWin4, eax
-
-	; Create static window for user cards:
-	invoke  CreateWindowEx, WS_EX_CLIENTEDGE, ADDR ClassStatic, NULL,\
-	        WS_VISIBLE + WS_CHILD + SS_OWNERDRAW    ,\
-	        WinChildX5, WinChildY5, WinCardWidth, WinCardHeight,\
-	        hWnd, CID_USERWIN5, hInstance, NULL
-	mov     hUserWin5, eax
-	
-	; Create toolbar:
-	invoke  CreateToolbarEx, hWnd, WS_CHILD + WS_VISIBLE + TBSTYLE_FLAT + WS_BORDER,\
-	            CID_TOOLBAR, 6, hInstance, BMP_TOOLBAR, ADDR ToolbarButtons,\
-	            8, 32, 32, 32, 32, SIZEOF TBBUTTON
-	mov     hToolbar, eax
-	invoke  SendMessage, eax, TB_AUTOSIZE, NULL, NULL
-
-	; Create stay button
-	invoke CreateWindowEx,NULL, ADDR ButtonClassName,ADDR ButtonText1,\ 
-				WS_CHILD or WS_VISIBLE or BS_DEFPUSHBUTTON,\ 
-		        300,500,140,25,hWnd,ButtonID,hInstance,NULL 
-    mov  hwndButton,eax
-	
-ret
-InitControls endp
-
-;===============================================================================
-; WinMain
-;===============================================================================
-WinMain proc hInst:HINSTANCE,hPrevInst:HINSTANCE,CmdLine:LPSTR,CmdShow:DWORD
-LOCAL wc:WNDCLASSEX
-LOCAL msg:MSG
-LOCAL hwnd:HWND
-	mov   	wc.cbSize,SIZEOF WNDCLASSEX
-	mov   	wc.style, CS_HREDRAW or CS_VREDRAW
-	mov   	wc.lpfnWndProc, OFFSET WndProc
-	mov   	wc.cbClsExtra,NULL
-	mov   	wc.cbWndExtra,NULL
-	push  	hInstance
-	pop   	wc.hInstance
-	mov   	wc.hbrBackground,COLOR_WINDOW
-	mov   	wc.lpszMenuName, NULL
-	mov   	wc.lpszClassName, OFFSET ClassName
-	invoke 	LoadIcon, hInstance, ICON_CHIP
-	mov   	wc.hIcon, eax
-	invoke 	LoadIcon, hInstance, ICON_CHIP
-	mov   	wc.hIconSm, eax
-	invoke 	LoadCursor,NULL,IDC_ARROW
-	mov   	wc.hCursor,eax
-	invoke 	RegisterClassEx, addr wc
-	invoke  LoadMenu, hInstance, MAINMENU ;load menu
-	mov     hMenu, eax                    ;store handle
-	INVOKE  CreateWindowEx,NULL,ADDR ClassName,ADDR AppName,\
-	        WS_OVERLAPPEDWINDOW-WS_MAXIMIZEBOX-WS_SIZEBOX,\
-	        CW_USEDEFAULT, CW_USEDEFAULT,932,800,NULL,hMenu,\
-	        hInst,NULL
-	        ;NOTE: notice addition of the hMenu parameter
-	        ;      in the CreateWindowEx call.
-	mov   	hwnd,eax
-	invoke 	ShowWindow, hwnd, CmdShow
-	invoke 	UpdateWindow, hwnd
-	.WHILE 	TRUE
-		invoke 	GetMessage, ADDR msg,NULL,0,0
-		.BREAK 	.IF (!eax)
-		invoke 	TranslateMessage, ADDR msg
-		invoke 	DispatchMessage, ADDR msg
-	.ENDW
-	mov     eax,msg.wParam
-	ret
-WinMain endp
-
-;===============================================================================
-;	Window procedure
-;===============================================================================	
-WndProc proc	hWnd:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
-	LOCAL ps:PAINTSTRUCT 
-	LOCAL hdc:HDC 
-	;LOCAL hMemDC:HDC 
-	LOCAL rect:RECT 
-	mov eax, uMsg
-	.IF 	eax==WM_CREATE
-		invoke InitControls, hWnd
-		invoke InitBitmaps, hWnd
-		invoke InitGame, hWnd
-		invoke LoadBitmap,hInstance,BMP_TABLE
-		mov hTable,eax
-
-	.ELSEIF	eax==WM_PAINT
-		invoke BeginPaint,hWnd,addr ps 
-		mov    hdc,eax 
-		mov	   mainhdc,eax
-		invoke CreateCompatibleDC,hdc 
-		mov    hMemDC,eax 
-		invoke SelectObject,hMemDC,hTable
-		invoke GetClientRect,hWnd,addr rect 
-
-		invoke BitBlt,hdc,0,0,rect.right,rect.bottom,hMemDC,0,0,SRCCOPY
-		invoke DeleteDC,hMemDC
-		invoke EndPaint,hWnd,addr ps
-
-	.ELSEIF eax==WM_COMMAND
-		mov 	eax, wParam
-		.IF ax==ButtonID
-			shr ax,16
-			.IF ax==BN_CLICKED
-				; logic
-				invoke crt_printf, addr DebugStr, 111
-			.ENDIF
-		.ELSE
-			shr 	ax, 16
-			.IF		ax==0 ; menu notification
-				invoke	ProcessMenuItems, hWnd, wParam
-			.ENDIF
-		.ENDIF
-	.ELSEIF	eax==WM_DESTROY
-		invoke  DeleteBitmaps
-		invoke	PostQuitMessage, NULL
-    .ELSEIF eax==WM_DRAWITEM
-        mov     eax, wParam
-        .IF     eax==CID_STATIC
-            push    ebx
-            mov     ebx, lParam
-            assume  ebx:ptr DRAWITEMSTRUCT
-			.IF drawFlag==0
-				invoke  DealerDraw, hWnd, [ebx].hdc
-			.ELSE
-				invoke	DealerDrawOneMore, hWnd, [ebx].hdc
-			.ENDIF
-            assume  ebx:nothing
-            pop     ebx
-            xor     eax, eax
-            inc     eax
-		.ELSEIF     eax==CID_USERWIN1 || (eax==CID_USERWIN2 && nofp >= 2) || (eax==CID_USERWIN3 && nofp >= 3) || (eax==CID_USERWIN4 && nofp >= 4) || (eax==CID_USERWIN5 && nofp >= 5)
-            push    ebx
-            mov     ebx, lParam
-            assume  ebx:ptr DRAWITEMSTRUCT
-			.IF drawFlag==0
-				invoke  DrawProc, hWnd, [ebx].hdc, eax
-			.ELSE
-				invoke DrawOneMore, hWnd, [ebx].hdc, eax
-			.ENDIF
-            assume  ebx:nothing
-            pop     ebx
-            xor     eax, eax
-            inc     eax
-		.ELSE
-            xor     eax, eax
-        .ENDIF
-	.ELSE
-		invoke 	DefWindowProc,hWnd,uMsg,wParam,lParam		
-		ret
-	.ENDIF
-ret
-WndProc endp
-
-;======================================================================
-;                           Init Bitmaps
-;======================================================================
-InitBitmaps proc hWnd:DWORD
-; Create DC's for backbuffer and current image
-    invoke  CreateCompatibleDC, NULL
-    mov     BackBufferDC, eax
-
-    invoke  CreateCompatibleDC, NULL
-    mov     ImageDC, eax
-
-; Create bitmap for backbuffer:
-    invoke  GetDC, hWnd
-    push    eax
-    invoke  CreateCompatibleBitmap, eax, 200+20,200+20
-    mov     hBackBuffer, eax
-    pop     eax
-    invoke  ReleaseDC, hWnd, eax
-    invoke  SelectObject, BackBufferDC, hBackBuffer
-
-; Create Arial font for the numbers
-    invoke  CreateFont, -30, NULL, NULL, NULL, FW_EXTRABOLD, \
-            FALSE, FALSE, FALSE, NULL, NULL, NULL, NULL, \
-            NULL, ADDR FontFace
-    mov     hFont, eax
-
-; Select font in Image DC
-	invoke   SelectObject, ImageDC, hFont
-
-	invoke   CreateSolidBrush, 0FF8000h
-	mov      hBackgroundColor, eax
-	invoke   CreateSolidBrush, 0FF8080h
-	mov      hTileColor, eax
-
-	mov      TextColor, 0800000h
-ret
-InitBitmaps endp
-
-DeleteBitmaps   PROTO STDCALL
-;======================================================================
-;                           Delete Bitmaps
-;======================================================================
-DeleteBitmaps proc
-    invoke  DeleteDC, BackBufferDC
-    invoke  DeleteDC, ImageDC
-    invoke  DeleteObject, hImage
-    invoke  DeleteObject, hBackBuffer
-    invoke  DeleteObject, hFont
-    invoke  DeleteObject, hBackgroundColor
-    invoke  DeleteObject, hTileColor
-ret
-DeleteBitmaps endp
-
-;======================================================================
-;                           Process Menu Items
-;======================================================================
-ProcessMenuItems proc hWnd:DWORD, wParam:DWORD
-	mov		eax, wParam
-	;-------------------------------------------------------------------------------
-	; Open Bitmap
-	;-------------------------------------------------------------------------------
-	.IF ax==MI_OPENBITMAP
-		;--- delete old image ---
-        invoke  DeleteObject, CardDC
-		invoke	DeleteObject, temp
-		invoke	DeleteObject, [temp + 4]
-		invoke	DeleteObject, [temp + 8]
-		invoke	DeleteObject, [temp + 12]
-		invoke	DeleteObject, [temp + 16]
-		invoke	DeleteObject, [temp + 20]
-		invoke	InvalidateRect, hWnd, NULL, FALSE
-	;-------------------------------------------------------------------------------
-	; New game
-	;-------------------------------------------------------------------------------
-	.ELSEIF ax==MI_NEWGAME
-		mov drawFlag,0
-		invoke	DrawCard, hWnd, 1
-		invoke	InvalidateRect, hWnd, NULL, FALSE	
-	;-------------------------------------------------------------------------------
-	; Draw One More
-	;-------------------------------------------------------------------------------
-	.ELSEIF ax==MI_ABOUT
-		mov drawFlag,1
-		invoke	InvalidateRect, hWnd, NULL, FALSE	
-	;-------------------------------------------------------------------------------
-	; Image type
-	;-------------------------------------------------------------------------------
-	.ELSEIF ax==MI_USEFILE
-	    invoke    CheckMenuItem, hMenu, MI_USEFILE, MF_CHECKED
-	    invoke    CheckMenuItem, hMenu, MI_USENUMBERS, MF_UNCHECKED
-	    invoke    CheckMenuItem, hMenu, MI_USESTANDARD, MF_UNCHECKED
-	    invoke    SendMessage, hToolbar, TB_CHECKBUTTON, MI_USEFILE, TRUE
-	    ;--- yet to do ---
-	.ELSEIF ax==MI_USENUMBERS
-	    invoke    CheckMenuItem, hMenu, MI_USEFILE, MF_UNCHECKED
-	    invoke    CheckMenuItem, hMenu, MI_USENUMBERS, MF_CHECKED
-	    invoke    CheckMenuItem, hMenu, MI_USESTANDARD, MF_UNCHECKED
-	    invoke    SendMessage, hToolbar, TB_CHECKBUTTON, MI_USENUMBERS, TRUE
-	    invoke    SetBitmap, hWnd, IMAGETYPE_NUMBERS
-	    invoke    InvalidateRect, hWnd, NULL, FALSE
-	.ELSEIF ax==MI_USESTANDARD
-	    invoke    CheckMenuItem, hMenu, MI_USEFILE, MF_UNCHECKED
-	    invoke    CheckMenuItem, hMenu, MI_USENUMBERS, MF_UNCHECKED
-	    invoke    CheckMenuItem, hMenu, MI_USESTANDARD, MF_CHECKED
-	    invoke    SendMessage, hToolbar, TB_CHECKBUTTON, MI_USESTANDARD, TRUE
-	    invoke    SetBitmap, hWnd, IMAGETYPE_STANDARD
-	    invoke    InvalidateRect, hWnd, NULL, FALSE
-	;-------------------------------------------------------------------------------
-	; Color Scheme
-	;-------------------------------------------------------------------------------
-	.ELSEIF ax==MI_COLORBLUE
-	    invoke    SetColors, eax
-	    invoke    CheckMenuItem, hMenu, MI_COLORRED, MF_UNCHECKED
-	    invoke    CheckMenuItem, hMenu, MI_COLORBLUE, MF_CHECKED
-	    invoke    CheckMenuItem, hMenu, MI_COLORGREEN, MF_UNCHECKED
-	    invoke    CheckMenuItem, hMenu, MI_COLORUGLY, MF_UNCHECKED
-	    invoke    SetBitmap, hWnd, CurImageType
-	    invoke    InvalidateRect, hWnd, NULL, FALSE
-	.ELSEIF ax==MI_COLORRED
-	    invoke    SetColors, eax
-	    invoke    CheckMenuItem, hMenu, MI_COLORRED, MF_CHECKED
-	    invoke    CheckMenuItem, hMenu, MI_COLORBLUE, MF_UNCHECKED
-	    invoke    CheckMenuItem, hMenu, MI_COLORGREEN, MF_UNCHECKED
-	    invoke    CheckMenuItem, hMenu, MI_COLORUGLY, MF_UNCHECKED
-	    invoke    SetBitmap, hWnd, CurImageType
-	    invoke    InvalidateRect, hWnd, NULL, FALSE
-	.ELSEIF ax==MI_COLORGREEN
-	    invoke    SetColors, eax
-	    invoke    CheckMenuItem, hMenu, MI_COLORRED, MF_UNCHECKED
-	    invoke    CheckMenuItem, hMenu, MI_COLORBLUE, MF_UNCHECKED
-	    invoke    CheckMenuItem, hMenu, MI_COLORGREEN, MF_CHECKED
-	    invoke    CheckMenuItem, hMenu, MI_COLORUGLY, MF_UNCHECKED
-	    invoke    SetBitmap, hWnd, CurImageType
-	    invoke    InvalidateRect, hWnd, NULL, FALSE
-	.ELSEIF ax==MI_COLORUGLY
-	    invoke    SetColors, eax
-	    invoke    CheckMenuItem, hMenu, MI_COLORRED, MF_UNCHECKED
-	    invoke    CheckMenuItem, hMenu, MI_COLORBLUE, MF_UNCHECKED
-	    invoke    CheckMenuItem, hMenu, MI_COLORGREEN, MF_UNCHECKED
-	    invoke    CheckMenuItem, hMenu, MI_COLORUGLY, MF_CHECKED
-	    invoke    SetBitmap, hWnd, CurImageType
-	    invoke    InvalidateRect, hWnd, NULL, FALSE
-		.ENDIF
-ret
-ProcessMenuItems endp
-
-;======================================================================
-;                           Draw Card
-;======================================================================
-DrawCard proc hWnd:DWORD, wParam:DWORD
-	mov		eax, wParam
-	
-    invoke  CreateCompatibleDC, NULL
-    mov     CardDC, eax
-	invoke  CreateCompatibleDC, NULL
-    mov     temp, eax
-	invoke  CreateCompatibleDC, NULL
-    mov     [temp+4], eax
-	invoke  CreateCompatibleDC, NULL
-    mov     [temp+8], eax
-	invoke  CreateCompatibleDC, NULL
-    mov     [temp+12], eax
-	invoke  CreateCompatibleDC, NULL
-    mov     [temp+16], eax
-	invoke  CreateCompatibleDC, NULL
-    mov     [temp+20], eax
-
-	invoke LoadBitmap,hInstance,BMP_CARD
-	mov hCard,eax
-	
-	invoke SelectObject,CardDC,hCard
-ret
-DrawCard endp
 
 ;================================================================================
 ;							GetRandomNumber
@@ -896,227 +704,5 @@ GetRandomNumber PROC range:DWORD
 
 ret
 GetRandomNumber ENDP
-
-;======================================================================
-;                           Set Bitmap
-;======================================================================
-SetBitmap   proc hWnd:DWORD, ImageType:DWORD
-    mov     eax, ImageType
-    ;.IF eax==IMAGETYPE_NUMBERS
-        ;--- delete old image ---
-        invoke  DeleteObject, hImage
-        ;--- Get DC ---
-        invoke  GetDC, hWnd
-        push    eax
-        ;--- Create new bitmap for the numbers bitmap ---
-        invoke  CreateCompatibleBitmap, eax, 200, 200
-        mov     hImage, eax
-        pop     eax
-        ;--- Release DC ---
-        invoke  ReleaseDC, hWnd, eax
-        ;--- Select new bitmap in DC ---
-        invoke  SelectObject, ImageDC, hImage
-        ;--- Draw numbers on the bitmap ---
-        ;invoke  DrawNumbers
-        ;--- Create the 3D effect on the bitmap ---
-        ;invoke  CreateTiles
-    ;.ENDIF
-    ;--- Set the new image type ---
-    mov     eax, ImageType
-    mov     CurImageType, eax
-ret
-SetBitmap   endp
-
-;======================================================================
-;                           Dealer Draw 2 Cards
-;======================================================================
-DealerDraw proc uses ebx edi esi hWnd:DWORD, hDC:DWORD
-LOCAL cardType:DWORD
-	; create bitmap object for memoryDC
-	invoke  CreateCompatibleBitmap, hDC, WinChildWidth, WinChildHeight
-	invoke SelectObject, temp, eax
-
-	; the first card
-	invoke GetRandomNumber,4
-	mov cardType,eax
-	invoke GetRandomNumber,13
-	invoke DisplayCard, hWnd, temp, 9, 9, cardType, eax
-
-	; the second card
-	invoke GetRandomNumber,4
-	mov cardType,eax
-	invoke GetRandomNumber,13
-	invoke DisplayCard, hWnd, temp, 39, 19, cardType, eax
-		
-	invoke  BitBlt, hDC, 0, 0, WinChildWidth, WinChildHeight, temp, 0, 0, SRCCOPY
-ret
-DealerDraw endp
-
-;======================================================================
-;                           Dealer Draw One More
-;======================================================================
-DealerDrawOneMore proc uses ebx edi esi hWnd:DWORD, hDC:DWORD
-LOCAL cardType:DWORD
-	invoke GetRandomNumber,4
-	mov cardType,eax
-	invoke GetRandomNumber,13
-	invoke DisplayCard, hWnd, temp, 69, 29, cardType, eax
-
-	invoke  BitBlt, hDC, 0, 0, WinChildWidth, WinChildHeight, temp, 0, 0, SRCCOPY
-ret
-DealerDrawOneMore endp
-
-;======================================================================
-;                           User Draw Cards
-;======================================================================
-DrawProc proc uses ebx edi esi hWnd:DWORD, hDC:DWORD, userID:DWORD
-LOCAL cardType:DWORD
-LOCAL index:DWORD
-	sub userID,602
-	mov eax,userID
-	mov ebx,SIZEOF DWORD
-	mul ebx
-	mov index,eax
-	invoke crt_printf, addr DebugStr, index
-
-	; create bitmap object for memoryDC
-	invoke  CreateCompatibleBitmap, hDC, WinCardWidth, WinCardHeight
-	mov ebx,index
-	invoke SelectObject, [temp+ebx], eax
-
-	; the first card
-	invoke GetRandomNumber,4
-	mov cardType,eax
-	;===========
-	;invoke send_all,cardType
-	invoke crt_printf,addr debug_comment,cardType
-	;==============
-	invoke GetRandomNumber,13
-	mov hi,eax
-
-	;==========================
-	;invoke send_all,hi
-	invoke crt_printf,addr debug_comment,hi;debug
-	;=========================
-	mov ebx,index
-	invoke DisplayCard, hWnd, [temp+ebx], 3, 3, cardType, hi
-
-	; the second card
-	invoke GetRandomNumber,4
-	mov cardType,eax
-	;================
-	;invoke send_all,cardType
-	invoke crt_printf,addr debug_comment,cardType
-	;================
-	invoke GetRandomNumber,13
-	mov hi,eax
-	;=================
-	;invoke send_all,index
-	invoke crt_printf,addr debug_comment,hi;debug
-	;=================
-	mov ebx,index
-	invoke DisplayCard, hWnd, [temp+ebx], 3, 33, cardType, hi
-
-	mov ebx,index
-	invoke  BitBlt, hDC, 0, 0, WinCardWidth, WinCardHeight, [temp+ebx], 0, 0, SRCCOPY
-ret
-DrawProc endp
-
-;======================================================================
-;                           User Draw One More
-;======================================================================
-DrawOneMore proc uses ebx edi esi hWnd:DWORD, hDC:DWORD, userID:DWORD
-LOCAL cardType:DWORD
-LOCAL index:DWORD
-	sub userID,602
-	mov eax,userID
-	mov ebx,SIZEOF DWORD
-	mul ebx
-	mov index,eax
-
-	invoke GetRandomNumber,4
-	mov cardType,eax
-	invoke GetRandomNumber,13
-	mov ebx,index
-	invoke DisplayCard, hWnd, [temp+ebx], 3, 63, cardType, eax
-
-	mov ebx,index
-	invoke  BitBlt, hDC, 0, 0, WinCardWidth, WinCardHeight, [temp+ebx], 0, 0, SRCCOPY
-ret
-DrawOneMore endp
-
-;======================================================================
-;                           Display a Card
-;======================================================================
-; cardType	: CARDTYPE1,2,3,4
-; cardNum	: 0 ~ 12
-DisplayCard proc uses ebx edi esi eax edx hWnd:DWORD, hDC:DWORD, leftTopX:DWORD, leftTopY:DWORD, cardType:DWORD, cardNum:DWORD
-	LOCAL X:DWORD
-	LOCAL Y:DWORD
-
-	; compute X pos
-	mov eax,CardWidth
-	mul cardNum
-	mov X,eax
-
-	; compute Y pos
-	mov eax,CardHeight
-	mul cardType
-	mov Y,eax
-	
-	invoke  BitBlt, hDC, leftTopX, leftTopY, CardWidth, CardHeight, CardDC, X, Y, SRCCOPY
-
-	;mov esi,OFFSET USER1
-	;invoke PlgBlt,hDC,esi,CardDC,0,0,CardWidth,CardHeight,NULL,0,0
-	
-
-ret
-DisplayCard endp
-
-;======================================================================
-;                           InitGame
-;======================================================================
-InitGame    proc    hWnd:DWORD
-    invoke  SetBitmap, hWnd, IMAGETYPE_NUMBERS
-ret
-InitGame    endp
-
-;======================================================================
-;                            Set Colors
-;======================================================================
-SetColors proc uses ebx cType:DWORD
-    invoke  DeleteObject, hBackgroundColor
-    invoke  DeleteObject, hTileColor
-; ebx = background
-; edx = text
-; eax = tile
-    mov     eax, cType
-    .IF     ax==MI_COLORRED
-        mov     eax, 00000A0h
-        mov     edx, 00000FFh
-        mov     ebx, 05050E0h
-    .ELSEIF ax==MI_COLORBLUE
-        mov     eax, 0FF8080h
-        mov     edx, 0800000h
-        mov     ebx, 0FF8000h
-    .ELSEIF ax==MI_COLORGREEN
-        mov     eax, 000A000h
-        mov     edx, 000FF00h
-        mov     ebx, 050E050h
-    .ELSEIF ax==MI_COLORUGLY
-        mov     eax, 0FF00FFh
-        mov     edx, 000FF00h
-        mov     ebx, 00000FFh
-    .ENDIF
-    mov     TextColor, edx
-
-    invoke  CreateSolidBrush, eax
-    mov     hTileColor, eax
-
-    invoke  CreateSolidBrush, ebx
-    mov     hBackgroundColor, eax
-ret
-SetColors endp
-
 
 end start

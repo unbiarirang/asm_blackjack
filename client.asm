@@ -11,6 +11,7 @@ includelib	\masm32\lib\user32.lib
 includelib	\masm32\lib\gdi32.lib
 includelib	\masm32\lib\comctl32.lib
 includelib	\masm32\lib\comdlg32.lib
+
 include		\masm32\include\wsock32.inc
 include		\masm32\include\kernel32.inc
 include		\masm32\include\comctl32.inc
@@ -79,10 +80,19 @@ DisplayCard			PROTO	STDCALL :DWORD, :DWORD, :DWORD, :DWORD, :DWORD, :DWORD
 	startbtn		equ		1
 	stay			equ		2
 	draw			equ		3
-
+	displayp1		equ		4
+	displayp2		equ		5
+	displayp3		equ		6
+	displayp4		equ		7
+	displayp5		equ		8
+	money			equ		9
+	showmoney		equ		10
+	betting			equ		11
 
 	; upper-left, upper-right, lower-left 
 	USER1			POINT <20,0>,<93,10>,<0,98>
+
+atoi PROTO C strptr:DWORD
 
 
 .data
@@ -115,21 +125,31 @@ DisplayCard			PROTO	STDCALL :DWORD, :DWORD, :DWORD, :DWORD, :DWORD, :DWORD
 	Rect200         RECT    <0,0,200,200>
 	drawFlag			db	0
 	ButtonClassName	db "button",0
+	TextClassName db "static",0
+	EditClassName db "edit",0
 	ButtonText1		db "Start",0
 	ButtonText2		db "Draw",0
 	ButtonText3		db "Stay",0
+	YouText			db "You",0
+	ConvertInt		db "%d",0
+	
+	howmuchmoney	db "10000",0
+	howmuchmoney2	db "10000",0
+	bettingmoney	DWORD ?
+	displaymoney		db	"The money you have",0
 	connect_comment BYTE "Player[%d] connected.", 0dh, 0ah, 0
 	string_comment BYTE "Yes/no = %d",0dh,0ah,0
 	id_comment BYTE "Your ID number is %d",0dh,0ah,0
+	test_comment BYTE "[%d]  [%d]", 0dh, 0ah, 0
 	wait_comment BYTE "Please wait for other players",0dh,0ah,0
 	debug_comment BYTE "send:%d", 0dh, 0ah, 0
 	nofp_comment BYTE "nofp:%d", 0dh, 0ah, 0
-	test_comment BYTE "recv %d",0dh,0ah,0
 	sendyes	BYTE "1"
 	sendno BYTE "0"
 	wsadata WSADATA <>
 	sock dd ?
 	sockList DWORD 4 DUP(0)
+			
 	hMemory dd ?
 	available_data dd ?
 	actual_data_read dd ?
@@ -141,14 +161,19 @@ DisplayCard			PROTO	STDCALL :DWORD, :DWORD, :DWORD, :DWORD, :DWORD, :DWORD
 	maxsocket BYTE 0
 	number BYTE 1
 	rbf BYTE ?
+	htext BYTE ?
 	sbf BYTE ?
 	nofp BYTE ?
-	userid BYTE ?
+	
 	cardtype dd ?
 	cardnumber dd ?
 	ThreadID DWORD ?
 
+
+	
 	hInstance			dd		?
+	playerid			db		?
+	userid				db		?
 	hMenu				dd		?
 	hStatic             dd		?
 	hUserWin1			dd		?
@@ -184,6 +209,8 @@ DisplayCard			PROTO	STDCALL :DWORD, :DWORD, :DWORD, :DWORD, :DWORD, :DWORD
 	ifdrawU4			dd		1
 	ifdrawU5			dd		1
 	hwndButton			HWND	?
+	hwndText			HWND	?
+	GetMoney			HWND	?
 	cntifdraw			dd		1
 	tempif				dd		0
 	drawcnt				dd		1
@@ -220,15 +247,12 @@ mov tempif,0
 decodeif ENDP
 
 recvifdraw PROC,nHwnd:DWORD
-
-
 invoke recv,sock,addr rbf,20,0
 mov ebx,0
 mov cntifdraw,0
 .while ebx < playernum				;receive the information,if the
 	invoke recv,sock,addr rbf,20,0
 	invoke decodeif,rbf
-	invoke crt_printf,addr test_comment,ebx
 	.if cntifdraw == 0
 		mov eax,tempif
 		mov ifdrawU1,eax
@@ -253,11 +277,6 @@ mov cntifdraw,0
 	inc cntifdraw
 	mov ebx,cntifdraw
 .endw
-invoke crt_printf,addr connect_comment,ifdrawU1
-invoke crt_printf,addr connect_comment,ifdrawU2
-invoke crt_printf,addr connect_comment,ifdrawU3
-invoke crt_printf,addr connect_comment,ifdrawU4
-invoke crt_printf,addr connect_comment,ifdrawU5
 
 invoke	InvalidateRect, nHwnd, NULL, FALSE	
 ret
@@ -295,10 +314,14 @@ mov sin.sin_addr,eax
 invoke connect,sock,addr sin,sizeof sin
 invoke recv,sock,addr rbf,20,0
 mov bl,rbf
-mov userid,bl
+mov playerid,bl
 mov rbf,0
 
-invoke crt_printf,addr id_comment,userid
+
+mov bl,playerid
+mov userid,bl
+
+invoke crt_printf,addr id_comment,playerid
 invoke crt_printf,addr wait_comment
 invoke recv,sock,addr rbf,20,0
 invoke decode,rbf
@@ -362,14 +385,14 @@ LOCAL DefaultFont:DWORD
 	        hWnd, CID_USERWIN3, hInstance, NULL
 	mov     hUserWin3, eax
 
-	; Create static window for user cards:
+	; Create static window for user4 cards:
 	invoke  CreateWindowEx, WS_EX_CLIENTEDGE, ADDR ClassStatic, NULL,\
 	        WS_VISIBLE + WS_CHILD + SS_OWNERDRAW    ,\
 	        WinChildX4, WinChildY4, WinCardWidth, WinCardHeight,\
 	        hWnd, CID_USERWIN4, hInstance, NULL
 	mov     hUserWin4, eax
 
-	; Create static window for user cards:
+	; Create static window for user5 cards:
 	invoke  CreateWindowEx, WS_EX_CLIENTEDGE, ADDR ClassStatic, NULL,\
 	        WS_VISIBLE + WS_CHILD + SS_OWNERDRAW    ,\
 	        WinChildX5, WinChildY5, WinCardWidth, WinCardHeight,\
@@ -379,14 +402,48 @@ LOCAL DefaultFont:DWORD
 	; Create toolbar:
 	invoke  SendMessage, eax, TB_AUTOSIZE, NULL, NULL
 
+	invoke CreateWindowEx,NULL, ADDR TextClassName,ADDR YouText,\ 
+				WS_CHILD or WS_VISIBLE or BS_DEFPUSHBUTTON,\ 
+		        WinChildX1, 358,40,20,hWnd,displayp1,hInstance,NULL
+
+	invoke CreateWindowEx,NULL, ADDR TextClassName,ADDR YouText,\ 
+				WS_CHILD or WS_VISIBLE or BS_DEFPUSHBUTTON,\ 
+		        WinChildX2,	325,40,20,hWnd,displayp2,hInstance,NULL 
+
+	invoke CreateWindowEx,NULL, ADDR TextClassName,ADDR YouText,\ 
+				WS_CHILD or WS_VISIBLE or BS_DEFPUSHBUTTON,\ 
+		        WinChildX3, 325,40,20,hWnd,displayp3,hInstance,NULL 
+
+	invoke CreateWindowEx,NULL, ADDR TextClassName,ADDR YouText,\ 
+				WS_CHILD or WS_VISIBLE or BS_DEFPUSHBUTTON,\ 
+		        WinChildX4, 250,40,20,hWnd,displayp4,hInstance,NULL 
+
+	invoke CreateWindowEx,NULL, ADDR TextClassName,ADDR YouText,\ 
+				WS_CHILD or WS_VISIBLE or BS_DEFPUSHBUTTON,\ 
+		        WinChildX5, 250,40,20,hWnd,displayp5,hInstance,NULL 
+
+	invoke CreateWindowEx,NULL, ADDR TextClassName,ADDR displaymoney,\ 
+				WS_CHILD or WS_VISIBLE or BS_DEFPUSHBUTTON,\ 
+		        600, 700,200,20,hWnd,showmoney,hInstance,NULL 
+	
+	invoke CreateWindowEx,NULL, ADDR TextClassName,ADDR howmuchmoney,\ 
+				WS_CHILD or WS_VISIBLE or BS_DEFPUSHBUTTON,\ 
+		        800, 700,100,20,hWnd,money,hInstance,NULL 
+
+	invoke CreateWindowEx,NULL, ADDR EditClassName,ADDR howmuchmoney,\ 
+				WS_CHILD or WS_VISIBLE or BS_DEFPUSHBUTTON,\ 
+		        425, 435,100,20,hWnd,betting,hInstance,NULL 
+
+
 	invoke CreateWindowEx,NULL, ADDR ButtonClassName,ADDR ButtonText1,\ 
 				WS_CHILD or WS_VISIBLE or BS_DEFPUSHBUTTON,\ 
 		        400,500,140,25,hWnd,startbtn,hInstance,NULL 
-    mov  hwndButton,eax
+
 	invoke CreateWindowEx,NULL, ADDR ButtonClassName,ADDR ButtonText2,\ 
 				WS_CHILD or WS_VISIBLE or BS_DEFPUSHBUTTON,\ 
 		        300,500,140,25,hWnd,draw,hInstance,NULL 
     mov  hwndButton,eax
+
 	invoke CreateWindowEx,NULL, ADDR ButtonClassName,ADDR ButtonText3,\ 
 				WS_CHILD or WS_VISIBLE or BS_DEFPUSHBUTTON,\ 
 		        500,500,140,25,hWnd,stay,hInstance,NULL 
@@ -434,6 +491,19 @@ LOCAL hwnd:HWND
 	invoke ShowWindow,eax,SW_HIDE
 	invoke GetDlgItem,hwnd,stay
 	invoke ShowWindow,eax,SW_HIDE
+	invoke GetDlgItem,hwnd,displayp1
+	invoke ShowWindow,eax,SW_HIDE
+	invoke GetDlgItem,hwnd,displayp2
+	invoke ShowWindow,eax,SW_HIDE
+	invoke GetDlgItem,hwnd,displayp3
+	invoke ShowWindow,eax,SW_HIDE
+	invoke GetDlgItem,hwnd,displayp4
+	invoke ShowWindow,eax,SW_HIDE
+	invoke GetDlgItem,hwnd,displayp5
+	invoke ShowWindow,eax,SW_HIDE
+	invoke GetDlgItem,hwnd,betting
+	invoke ShowWindow,eax,SW_HIDE
+
 	
 	.WHILE 	TRUE
 		invoke 	GetMessage, ADDR msg,NULL,0,0
@@ -450,8 +520,7 @@ WinMain endp
 ;===============================================================================	
 WndProc proc	hWnd:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
 	LOCAL ps:PAINTSTRUCT 
-	LOCAL hdc:HDC 
-	;LOCAL hMemDC:HDC 
+	LOCAL hdc:HDC 	;LOCAL hMemDC:HDC 
 	LOCAL rect:RECT
 	mov eax, uMsg
 	.IF 	eax==WM_CREATE
@@ -485,7 +554,25 @@ WndProc proc	hWnd:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
 				;sub nofp,48
 				invoke GetDlgItem,hWnd,startbtn
 				invoke ShowWindow,eax,SW_HIDE
-			
+				invoke crt_printf,addr id_comment,userid
+				.IF userid==0
+					invoke GetDlgItem,hWnd,displayp1
+					invoke ShowWindow,eax,SW_SHOW
+				.ELSEIF userid==1
+					invoke GetDlgItem,hWnd,displayp2
+					invoke ShowWindow,eax,SW_SHOW
+				.ELSEIF userid==2
+					invoke GetDlgItem,hWnd,displayp3
+					invoke ShowWindow,eax,SW_SHOW
+				.ELSEIF userid==3
+					invoke GetDlgItem,hWnd,displayp4
+					invoke ShowWindow,eax,SW_SHOW
+				.ELSEIF userid==4
+					invoke GetDlgItem,hWnd,displayp5
+					invoke ShowWindow,eax,SW_SHOW	
+				.ENDIF
+				invoke GetDlgItem,hWnd,betting
+				invoke ShowWindow,eax,SW_SHOW
 				 mov drawFlag,0
 				invoke DrawCard, hWnd, 1
 				invoke CreateThread,NULL,NULL,OFFSET recvndraw,hWnd,NULL,ADDR ThreadID
@@ -502,8 +589,16 @@ WndProc proc	hWnd:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
 				invoke ShowWindow,eax,SW_HIDE		
 				mov mflag,0
 				mov drawFlag,1
+
+				invoke GetDlgItem,hWnd,betting
+				mov GetMoney,eax
+				invoke GetWindowText,GetMoney,addr rbf,255
+				lea eax, rbf
+				push eax 
+				call atoi 
+				mov bettingmoney,eax 
+
 				invoke CreateThread,NULL,NULL,OFFSET recvifdraw,hWnd,NULL,ADDR ThreadID
-				;invoke InvalidateRect, hWnd, NULL, FALSE
 			.ENDIF
 		.ELSEIF ax==draw
 			shr ax,16
@@ -518,9 +613,17 @@ WndProc proc	hWnd:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
 				invoke ShowWindow,eax,SW_HIDE
 				mov mflag,0
 				mov drawFlag,1
+
+				invoke GetDlgItem,hWnd,betting
+				mov GetMoney,eax
+				invoke GetWindowText,GetMoney,addr rbf,255
+				lea eax, rbf
+				push eax 
+				call atoi 
+				mov bettingmoney,eax 
+
 				invoke CreateThread,NULL,NULL,OFFSET recvifdraw,hWnd,NULL,ADDR ThreadID
-				invoke crt_printf,addr nofp_comment,drawFlag
-				;invoke	InvalidateRect, hWnd, NULL, FALSE	
+			
 			.ENDIF
 		.ELSE
 			shr 	ax, 16
@@ -621,7 +724,6 @@ DeleteBitmaps proc
     invoke  DeleteObject, hTileColor
 ret
 DeleteBitmaps endp
-
 ;======================================================================
 ;                           Process Menu Items
 ;======================================================================
@@ -714,6 +816,7 @@ ProcessMenuItems proc hWnd:DWORD, wParam:DWORD
 		.ENDIF
 ret
 ProcessMenuItems endp
+
 
 ;======================================================================
 ;                           Draw Card
@@ -842,17 +945,21 @@ DealerDraw endp
 ;======================================================================
 DealerDrawOneMore proc uses ebx edi esi hWnd:DWORD, hDC:DWORD
 LOCAL cardType:DWORD
-	.if DrawD == 1
+	.if ifdrawD == 1
 		invoke recv,sock,addr rbf,20,0
 		invoke crt_printf,addr debug_comment,rbf
 		mov eax,0
 		mov al,rbf
 		mov cardType,eax
 		invoke recv,sock,addr rbf,20,0
-		invoke crt_printf,addr debug_comment,rbf
-		mov eax,0
+		
+		invoke encode,20
 		mov al,rbf
-		invoke DisplayCard, hWnd, temp, 69, 29, cardType, eax
+		.if sbf != al
+			mov eax,0
+			mov al,rbf
+			invoke DisplayCard, hWnd, temp, 69, 29, cardType, eax
+		.endif
 	.endif
 	invoke  BitBlt, hDC, 0, 0, WinChildWidth, WinChildHeight, temp, 0, 0, SRCCOPY
 ret
@@ -943,9 +1050,51 @@ LOCAL index:DWORD
 		invoke DisplayCard, hWnd, [temp+ebx], 3, 63, cardType, eax
 	.endif
 
+	mov eax,drawcnt
+
+	.if eax == playernum
+		invoke crt_printf,ADDR wait_comment
+		invoke recv,sock,addr rbf,20,0
+		invoke crt_printf,ADDR test_comment, rbf,userid
+		.if rbf == 1
+
+			invoke GetDlgItem,hWnd,money
+			mov GetMoney,eax
+			invoke GetWindowText,GetMoney,addr rbf,255
+			lea eax, rbf
+			push eax 
+			call atoi
+			add eax,bettingmoney
+			add eax,bettingmoney
+			;invoke SetWindowText,GetMoney,ADDR howmuchmoney,255
+			invoke wsprintf,ADDR howmuchmoney,ADDR ConvertInt,eax
+			invoke SetWindowText,GetMoney,ADDR howmuchmoney
+			invoke crt_printf,ADDR test_comment, bettingmoney,eax
+			
+		.elseif rbf == 2
+			invoke crt_printf,ADDR test_comment,bettingmoney,eax
+		.elseif rbf == 3
+		invoke GetDlgItem,hWnd,money
+		mov GetMoney,eax
+		invoke GetWindowText,GetMoney,ADDR rbf,255
+		lea eax, rbf
+		push eax 
+		call atoi
+		sub eax,bettingmoney
+		sub eax,bettingmoney
+		
+		invoke wsprintf,ADDR howmuchmoney,ADDR ConvertInt,eax
+		invoke SetWindowText,GetMoney,ADDR howmuchmoney
+		invoke crt_printf,ADDR test_comment, bettingmoney,eax
+		.endif
+	.endif
+
 	inc drawcnt
 	mov ebx,index
 	invoke  BitBlt, hDC, 0, 0, WinCardWidth, WinCardHeight, [temp+ebx], 0, 0, SRCCOPY
+	
+
+	
 ret
 DrawOneMore endp
 
