@@ -1,0 +1,54 @@
+#include "\masm32\include\resource.h"
+
+#define 		ICON1_BIG           400
+#define 		ICON2_SMALL         401
+#define			ICON_CHIP			402
+
+#define 		MAINMENU 			301
+
+#define 		MI_NEWGAME 			101
+#define 		MI_OPENBITMAP 		102
+#define 		MI_EASY 			103
+#define 		MI_MEDIUM 			104
+#define 		MI_HARD 			105
+#define 		MI_USESTANDARD 		106
+#define 		MI_USENUMBERS 		107
+#define 		MI_USEFILE 			108
+#define 		MI_COLORBLUE 		109
+#define 		MI_COLORRED 		110
+#define 		MI_COLORGREEN 		111
+#define 		MI_COLORUGLY 		112
+#define 		MI_ABOUT 			113
+
+#define			BMP_TOOLBAR			801
+#define			BMP_DEMOBITMAP		802
+
+#define			ID_ABOUTDIALOG		700
+
+#define 		BMP_TABLE			200
+#define			BMP_CARD_A1			201
+#define			BMP_CARD 			202
+
+
+ICON1_BIG       ICON    DISCARDABLE     "resources\\big.ico"
+ICON2_SMALL     ICON    DISCARDABLE     "resources\\small.ico"
+ICON_CHIP		ICON 	DISCARDABLE		"resources\\chip.ico"
+
+BMP_TABLE		BITMAP	DISCARDABLE "resources\\table.bmp"
+BMP_CARD_A1		BITMAP	DISCARDABLE "resources\\a1.bmp"
+BMP_CARD 		BITMAP	DISCARDABLE	"resources\\card.bmp"
+
+
+
+
+
+ID_ABOUTDIALOG DIALOG DISCARDABLE  0, 0, 164, 95
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "About Mosaic..."
+FONT 8, "MS Sans Serif"
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,57,74,50,14
+    ICON            ICON1_BIG,201,7,7,21,20
+    LTEXT           "Mosaic 1.0\n\nExample of the Mosaic lesson in the Win32Asm Tutorials.\n\n(C) 2001 by Exagone (Thomas Bleeker)\nhttp://exagone.cjb.net",
+                    202,34,7,123,61
+END
