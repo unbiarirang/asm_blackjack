@@ -12,8 +12,10 @@ let you have a max point which is no more than 21.
 ## Game characteristic
 1.Multiplay
 Provide online match.
-![Image text](https://raw.github.com/unbiarirang/asm_blackjack/master/pic/multiplay_pic.png)
 Host can set the player number of the game(2~5 people), when create the room.
+
+![Image text](https://raw.github.com/unbiarirang/asm_blackjack/master/pic/multiplay_pic.png)
+
 
 2.GUI
 Provide beautiful GUI interface.
